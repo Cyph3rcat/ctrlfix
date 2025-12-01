@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CtrlFix Terminal - Device Repair Assistant</title>
+    
+    <!-- xterm.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    
+    <!-- xterm.js -->
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #1e1e1e;
+            font-family: 'Courier New', Consolas, monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #header {
+            background: #252525;
+            color: #94d2ff;
+            padding: 15px 20px;
+            border-bottom: 2px solid #ff69b4;
+            text-align: center;
+        }
+        
+        #header h1 {
+            font-size: 20px;
+            font-weight: bold;
+            color: #ffffff;
+        }
+        
+        #header p {
+            font-size: 12px;
+            color: #94d2ff;
+            margin-top: 5px;
+        }
+        
+        #terminal-container {
+            flex: 1;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        #terminal {
+            width: 100%;
+            height: 100%;
+        }
+        
+        #status {
+            background: #252525;
+            color: #666;
+            padding: 8px 20px;
+            border-top: 1px solid #333;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .disconnected .status-indicator {
+            background: #f44336;
+            animation: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>🔧 CtrlFix Terminal</h1>
+        <p>AI-Powered Device Repair Assistant | Type your responses and press Enter</p>
+    </div>
+    
+    <div id="terminal-container">
+        <div id="terminal"></div>
+    </div>
+    
+    <div id="status">
+        <span id="connection-status">
+            <span class="status-indicator"></span>
+            <span id="status-text">Connected</span>
+        </span>
+        <span id="session-info">Session active</span>
+    </div>
+    
+    <script>
+        // Initialize xterm.js terminal
+        const term = new Terminal({
+            theme: {
+                background: '#1e1e1e',
+                foreground: '#94d2ff',     // Light blue
+                cursor: '#ffffff',
+                cursorAccent: '#1e1e1e',
+                black: '#000000',
+                red: '#ff6b6b',
+                green: '#51cf66',
+                yellow: '#ffd93d',
+                blue: '#94d2ff',
+                magenta: '#ff69b4',        // Pink
+                cyan: '#6bcfff',
+                white: '#ffffff',
+                brightBlack: '#666666',
+                brightRed: '#ff8787',
+                brightGreen: '#69db7c',
+                brightYellow: '#ffe066',
+                brightBlue: '#a8daff',
+                brightMagenta: '#ffa8d8',
+                brightCyan: '#99e9f2',
+                brightWhite: '#ffffff'
+            },
+            cursorBlink: true,
+            cursorStyle: 'block',
+            fontSize: 14,
+            fontFamily: '"Cascadia Code", "Courier New", Consolas, monospace',
+            lineHeight: 1.2,
+            letterSpacing: 0,
+            scrollback: 1000,
+            convertEol: true
+        });
+        
+        // Open terminal in container
+        term.open(document.getElementById('terminal'));
+        
+        // Focus terminal
+        term.focus();
+        
+        // Initialize Socket.IO connection
+        const socket = io();
+        
+        // Current input line buffer
+        let currentLine = '';
+        let isWaitingForResponse = false;
+        
+        // Connection status management
+        const statusIndicator = document.getElementById('connection-status');
+        const statusText = document.getElementById('status-text');
+        const sessionInfo = document.getElementById('session-info');
+        
+        function setConnectionStatus(connected) {
+            if (connected) {
+                statusIndicator.classList.remove('disconnected');
+                statusText.textContent = 'Connected';
+                sessionInfo.textContent = 'Session active';
+            } else {
+                statusIndicator.classList.add('disconnected');
+                statusText.textContent = 'Disconnected';
+                sessionInfo.textContent = 'Please refresh';
+            }
+        }
+        
+        // Socket.IO event handlers
+        socket.on('connect', () => {
+            console.log('✅ WebSocket connected');
+            setConnectionStatus(true);
+            term.writeln('🔌 \x1b[92mConnected to CtrlFix server...\x1b[0m\r\n');
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('❌ WebSocket disconnected');
+            setConnectionStatus(false);
+            term.writeln('\r\n\x1b[91m⚠️  Connection lost. Please refresh the page.\x1b[0m\r\n');
+        });
+        
+        socket.on('output', (data) => {
+            const text = data.text || '';
+            const needsInput = data.needs_input !== false;
+            const completed = data.completed || false;
+            
+            // Write bot response
+            term.write('\r\n' + text + '\r\n');
+            
+            if (completed) {
+                term.writeln('\r\n\x1b[92m✓ Session completed. Refresh to start a new session.\x1b[0m\r\n');
+                sessionInfo.textContent = 'Session completed';
+                isWaitingForResponse = false;
+            } else if (needsInput) {
+                // Show prompt
+                term.write('\r\n\x1b[97mYou:\x1b[0m ');
+                isWaitingForResponse = false;
+            }
+        });
+        
+        socket.on('pong', () => {
+            // Keep-alive response
+        });
+        
+        // Handle user input
+        term.onData((e) => {
+            // Don't accept input while waiting for response
+            if (isWaitingForResponse) {
+                return;
+            }
+            
+            switch (e) {
+                case '\r': // Enter key
+                    if (currentLine.trim().length === 0) {
+                        // Allow empty input (for steps that just need Enter)
+                        currentLine = 'continue';
+                    }
+                    
+                    // Send input to server
+                    socket.emit('input', { text: currentLine });
+                    term.write('\r\n');
+                    
+                    // Clear line and wait for response
+                    currentLine = '';
+                    isWaitingForResponse = true;
+                    break;
+                
+                case '\u007F': // Backspace (DEL)
+                    if (currentLine.length > 0) {
+                        currentLine = currentLine.slice(0, -1);
+                        term.write('\b \b');
+                    }
+                    break;
+                
+                case '\u0003': // Ctrl+C
+                    term.write('^C');
+                    currentLine = '';
+                    term.write('\r\n\x1b[97mYou:\x1b[0m ');
+                    break;
+                
+                default:
+                    // Regular character input
+                    if (e >= String.fromCharCode(0x20) && e <= String.fromCharCode(0x7E)) {
+                        currentLine += e;
+                        term.write(e);
+                    }
+            }
+        });
+        
+        // Keep-alive ping every 30 seconds
+        setInterval(() => {
+            socket.emit('ping');
+        }, 30000);
+        
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                term.focus();
+            }
+        });
+        
+        // Auto-focus terminal on load
+        window.addEventListener('load', () => {
+            term.focus();
+        });
+    </script>
+</body>
+</html>

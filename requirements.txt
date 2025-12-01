@@ -12,6 +12,12 @@ requests>=2.31.0                 # HTTP library for SerpAPI calls
 # Environment variables
 python-dotenv>=1.0.0             # Load .env files
 
+# Web deployment (Flask + WebSocket)
+Flask>=3.0.0                     # Web framework
+Flask-SocketIO>=5.3.0            # WebSocket support for real-time communication
+eventlet>=0.33.0                 # Async networking library for SocketIO
+gunicorn>=21.0.0                 # Production WSGI server for deployment
+
 # Terminal utilities (for arrow key menus on Unix systems)
 # Note: termios and tty are built-in on Unix/Linux/macOS, not needed on Windows
 

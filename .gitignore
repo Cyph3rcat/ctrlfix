@@ -24,12 +24,18 @@ dist/
 # Service account credentials
 *.json
 !requirements.json
+!railway.json
 
 # Logs
 *.log
 
 # Tickets
 tickets.json
+
+# Test files
+confirm.py
+amazon_response_full.json
+amazon_prices.json
 
 # OS
 .DS_Store
