@@ -342,8 +342,8 @@ class FlowManager:
     # Step 0: Welcome
     def _step_welcome(self):
         message = (
-            "Hello! I'm DormDoctorDiagnostics 🔧\n\n"
-            "I'm a chatbot designed by your friendly dorm mechanic to help with:\n"
+            "Hello! I'm CtrlFixDiagnostics 🔧\n\n"
+            "I'm a chatbot designed by CtrlFix to help with:\n"
             "- Quick diagnostics and problem identification\n"
             "- Cost estimation for repairs\n"
             "- Booking appointments and arranging drop-offs\n\n"
