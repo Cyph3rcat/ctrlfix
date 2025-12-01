@@ -2,6 +2,8 @@
 Contains API keys, constants, and configuration values.
 """
 import os
+import json
+import tempfile
 from dotenv import load_dotenv
 
 # Load environment variables from .env
@@ -10,11 +12,35 @@ load_dotenv()
 # API Keys and Credentials
 DIALOGFLOW_PROJECT_ID = "ctrlfix-479512"
 
-# Vertex service account JSON (the file ending with ...216d) - located in repo root
-VERTEX_CREDENTIALS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ctrlfix-479512-6f3bedef216d.json"))
+# Helper function to get credentials path (supports env var JSON or file path)
+def _get_credentials_path(env_var_name, fallback_file_path):
+    """
+    Get credentials either from environment variable (JSON string) or file path.
+    This allows Railway deployment without committing JSON files to git.
+    """
+    json_content = os.getenv(env_var_name)
+    
+    if json_content:
+        # Create temporary file with JSON content from env var
+        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        temp_file.write(json_content)
+        temp_file.close()
+        return temp_file.name
+    else:
+        # Fall back to local file path
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", fallback_file_path))
 
-# Primary service account used for Dialogflow and Google Sheets (moved to repo root)
-SERVICE_ACCOUNT_JSON = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ctrlfix-479512-5181093c4568.json"))
+# Vertex service account JSON (the file ending with ...216d)
+VERTEX_CREDENTIALS_PATH = _get_credentials_path(
+    "VERTEX_CREDENTIALS_JSON",
+    "ctrlfix-479512-6f3bedef216d.json"
+)
+
+# Primary service account used for Dialogflow and Google Sheets
+SERVICE_ACCOUNT_JSON = _get_credentials_path(
+    "SERVICE_ACCOUNT_JSON", 
+    "ctrlfix-479512-5181093c4568.json"
+)
 
 # Backwards-compatible aliases
 DIALOGFLOW_CREDENTIALS_PATH = SERVICE_ACCOUNT_JSON
