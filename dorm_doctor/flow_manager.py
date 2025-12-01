@@ -938,7 +938,7 @@ class FlowManager:
             f"   Estimate: {self.session.get_data('estimated_cost')}\n\n"
             f"📍 Drop-off Location:\n"
             f"   {DROPOFF_ADDRESS}\n\n"
-            f"📞 Questions? Contact the mechanic:\n"
+            f"📞 Questions? Contact our mechanic:\n"
             f"   {MECHANIC_CONTACT}\n\n"
             f"Drop-off Instructions:\n"
             f"1. Include charger and relevant accessories\n"

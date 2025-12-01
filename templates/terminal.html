@@ -193,8 +193,17 @@
             const needsInput = data.needs_input !== false;
             const completed = data.completed || false;
             
+            // Apply additional coloring to main output text
+            let coloredText = text;
+            
+            // Color [Gemini], [PriceLookup], [DialogflowClient], etc. in cyan
+            coloredText = coloredText.replace(/\[([A-Za-z]+(?:\([^)]+\))?)\]/g, '\x1b[96m[$1]\x1b[0m');
+            
+            // Color "Press Enter" type instructions in yellow
+            coloredText = coloredText.replace(/(Press Enter|Type|press Enter|Enter to continue|or type)/gi, '\x1b[93m$1\x1b[0m');
+            
             // Write bot response
-            term.write('\r\n' + text + '\r\n');
+            term.write('\r\n' + coloredText + '\r\n');
             
             if (completed) {
                 term.writeln('\r\n\x1b[92m✓ Session completed. Refresh to start a new session.\x1b[0m\r\n');
@@ -208,9 +217,65 @@
         });
         
         socket.on('diagnostic', (data) => {
-            // Show diagnostic logs in gray/cyan
+            // Show diagnostic logs with HTML colors
             const diagnosticText = data.text || '';
-            term.writeln('\x1b[90m' + diagnosticText + '\x1b[0m');
+            
+            // If it contains HTML tags (from our color converter), render with color
+            if (diagnosticText.includes('<span')) {
+                // Strip HTML tags and extract text with ANSI color codes
+                // We'll parse the HTML and convert back to ANSI for xterm
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(`<div>${diagnosticText}</div>`, 'text/html');
+                
+                // Function to recursively extract colored text
+                function extractWithColors(node) {
+                    let result = '';
+                    
+                    for (let child of node.childNodes) {
+                        if (child.nodeType === Node.TEXT_NODE) {
+                            result += child.textContent;
+                        } else if (child.nodeType === Node.ELEMENT_NODE) {
+                            if (child.tagName === 'SPAN' && child.style.color) {
+                                // Map HTML colors back to ANSI codes
+                                const colorMap = {
+                                    'rgb(255, 107, 107)': '\x1b[91m',  // Red
+                                    '#ff6b6b': '\x1b[91m',
+                                    'rgb(81, 207, 102)': '\x1b[92m',   // Green
+                                    '#51cf66': '\x1b[92m',
+                                    'rgb(255, 212, 59)': '\x1b[93m',   // Yellow
+                                    '#ffd43b': '\x1b[93m',
+                                    'rgb(116, 192, 252)': '\x1b[94m',  // Blue
+                                    '#74c0fc': '\x1b[94m',
+                                    'rgb(247, 131, 172)': '\x1b[95m',  // Pink
+                                    '#f783ac': '\x1b[95m',
+                                    'rgb(77, 171, 247)': '\x1b[96m',   // Cyan
+                                    '#4dabf7': '\x1b[96m',
+                                    'rgb(134, 142, 150)': '\x1b[90m',  // Gray
+                                    '#868e96': '\x1b[90m',
+                                    'rgb(233, 236, 239)': '\x1b[97m',  // White
+                                    '#e9ecef': '\x1b[97m',
+                                    'rgb(248, 249, 250)': '\x1b[97m',  // Bright White
+                                    '#f8f9fa': '\x1b[97m',
+                                };
+                                
+                                const color = child.style.color;
+                                const ansiCode = colorMap[color] || '\x1b[97m';
+                                result += ansiCode + extractWithColors(child) + '\x1b[0m';
+                            } else {
+                                result += extractWithColors(child);
+                            }
+                        }
+                    }
+                    
+                    return result;
+                }
+                
+                const coloredText = extractWithColors(doc.body.firstChild);
+                term.writeln(coloredText);
+            } else {
+                // Plain text diagnostic - show in cyan
+                term.writeln('\x1b[96m' + diagnosticText + '\x1b[0m');
+            }
         });
         
         socket.on('pong', () => {

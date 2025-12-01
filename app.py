@@ -114,12 +114,32 @@ def handle_input(data):
             if 0 <= choice < len(BOOKING_OPTIONS):
                 user_input = str(choice)
     
+    # Capture stdout to intercept diagnostic prints
+    import sys
+    from io import StringIO
+    old_stdout = sys.stdout
+    sys.stdout = captured_output = StringIO()
+    
     try:
-        # Process the input through flow manager (colors will show in server console)
+        # Process the input through flow manager
         result = flow.process_input(user_input)
         session_data['current_step'] = flow.session.get_step()
         
-        # Strip ANSI color codes from message for web terminal
+        # Get captured diagnostic output
+        diagnostic_logs = captured_output.getvalue()
+        
+        # Restore stdout
+        sys.stdout = old_stdout
+        
+        # Send diagnostic logs to web terminal (with colors preserved as HTML)
+        if diagnostic_logs.strip():
+            # Convert ANSI codes to HTML colors for web terminal
+            colored_html = _ansi_to_html(diagnostic_logs.strip())
+            # Also print to server console with original colors
+            print(diagnostic_logs.strip())
+            emit('diagnostic', {'text': colored_html})
+        
+        # Strip ANSI color codes from main message for web terminal
         import re
         clean_message = re.sub(r'\x1b\[[0-9;]*m', '', result['message'])
         
@@ -136,6 +156,8 @@ def handle_input(data):
             del sessions[session_id]
     
     except Exception as e:
+        # Restore stdout on error
+        sys.stdout = old_stdout
         print(f"{Colors.RED}[Error] {e}{Colors.RESET}")
         import traceback
         traceback.print_exc()
@@ -149,6 +171,63 @@ def handle_input(data):
 def handle_ping():
     """Keep-alive ping from client"""
     emit('pong')
+
+
+def _ansi_to_html(text):
+    """Convert ANSI color codes to HTML span tags for web terminal display"""
+    import re
+    
+    # ANSI to HTML color mapping
+    color_map = {
+        '30': 'color: #000000',  # Black
+        '31': 'color: #ff6b6b',  # Red
+        '32': 'color: #51cf66',  # Green
+        '33': 'color: #ffd43b',  # Yellow
+        '34': 'color: #74c0fc',  # Blue
+        '35': 'color: #f783ac',  # Pink/Magenta
+        '36': 'color: #4dabf7',  # Cyan
+        '37': 'color: #e9ecef',  # White
+        '90': 'color: #868e96',  # Gray
+        '91': 'color: #ff6b6b',  # Bright Red
+        '92': 'color: #51cf66',  # Bright Green
+        '93': 'color: #ffd43b',  # Bright Yellow
+        '94': 'color: #74c0fc',  # Bright Blue
+        '95': 'color: #f783ac',  # Bright Magenta
+        '96': 'color: #4dabf7',  # Bright Cyan
+        '97': 'color: #f8f9fa',  # Bright White
+        '1': 'font-weight: bold',  # Bold
+    }
+    
+    # Replace ANSI codes with HTML spans
+    def replace_ansi(match):
+        codes = match.group(1).split(';')
+        if '0' in codes or not codes[0]:  # Reset
+            return '</span>'
+        
+        styles = []
+        for code in codes:
+            if code in color_map:
+                styles.append(color_map[code])
+        
+        if styles:
+            return f'<span style="{"; ".join(styles)}">'
+        return ''
+    
+    # Convert ANSI escape sequences
+    html = re.sub(r'\x1b\[([0-9;]*)m', replace_ansi, text)
+    
+    # Additional coloring for specific patterns if no ANSI codes present
+    if '\x1b[' not in text:
+        # Color [Gemini], [PriceLookup], etc. in cyan
+        html = re.sub(r'\[([A-Za-z]+(?:\([^)]+\))?)\]', r'<span style="color: #4dabf7">[\1]</span>', html)
+        # Color "Press Enter" type instructions in yellow
+        html = re.sub(r'(Press Enter|Type|press Enter|Enter to continue)', r'<span style="color: #ffd43b">\1</span>', html, flags=re.IGNORECASE)
+    
+    # Close any remaining open spans
+    open_spans = html.count('<span') - html.count('</span>')
+    html += '</span>' * open_spans
+    
+    return html
 
 
 if __name__ == '__main__':
