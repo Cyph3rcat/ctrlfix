@@ -114,30 +114,18 @@ def handle_input(data):
             if 0 <= choice < len(BOOKING_OPTIONS):
                 user_input = str(choice)
     
-    # Capture stdout to send diagnostic logs to web terminal
-    import sys
-    from io import StringIO
-    old_stdout = sys.stdout
-    sys.stdout = captured_output = StringIO()
-    
     try:
-        # Process the input through flow manager
+        # Process the input through flow manager (colors will show in server console)
         result = flow.process_input(user_input)
         session_data['current_step'] = flow.session.get_step()
         
-        # Get captured diagnostic output
-        diagnostic_logs = captured_output.getvalue()
-        
-        # Restore stdout
-        sys.stdout = old_stdout
-        
-        # Send diagnostic logs to terminal
-        if diagnostic_logs.strip():
-            emit('diagnostic', {'text': diagnostic_logs.strip()})
+        # Strip ANSI color codes from message for web terminal
+        import re
+        clean_message = re.sub(r'\x1b\[[0-9;]*m', '', result['message'])
         
         # Send response back to client
         emit('output', {
-            'text': result['message'],
+            'text': clean_message,
             'needs_input': result.get('needs_input', True),
             'completed': result.get('completed', False)
         })
@@ -148,9 +136,9 @@ def handle_input(data):
             del sessions[session_id]
     
     except Exception as e:
-        # Restore stdout on error
-        sys.stdout = old_stdout
         print(f"{Colors.RED}[Error] {e}{Colors.RESET}")
+        import traceback
+        traceback.print_exc()
         emit('output', {
             'text': f"\n❌ Error processing request: {str(e)}",
             'needs_input': False

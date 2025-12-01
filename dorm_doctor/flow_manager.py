@@ -190,6 +190,51 @@ class FlowManager:
                     self.session.add_message("bot", clarification)
                     return {"message": clarification, "completed": False, "needs_input": True}
             
+            # SPECIAL CASE: If we're in ADDITIONAL_INFO step, extract additional device info
+            if current_step == DiagnosticStep.ADDITIONAL_INFO:
+                print(f"[FlowManager] Attempting extract_additional_info for additional device specs")
+                result = self.gemini.extract_additional_info(
+                    user_input=user_input,
+                    conversation_history=self.session.conversation_history,
+                    device_type=self.session.get_data("device.type"),
+                    brandmodel=self.session.get_data("device.brandmodel")
+                )
+                
+                print_diagnostic(f"[Gemini] Additional info extraction: {Colors.CYAN}{result}{Colors.RESET}")
+                
+                if result.get("relevant"):
+                    # User provided relevant device info
+                    additional_info = result["additional_info"]
+                    self.session.update_data("device.additional_info", additional_info)
+                    print_success(f"Additional info: {Colors.LIGHT_BLUE}{additional_info}{Colors.RESET}")
+                    
+                    confirmation = f"Got it! I've noted: {additional_info}"
+                    self.session.add_message("bot", confirmation)
+                    
+                    # Move to next step
+                    self.session.next_step()
+                    next_result = self._step_issue_type()
+                    self.session.add_message("bot", next_result["message"])
+                    
+                    return {
+                        "message": f"{confirmation}\n\n{next_result['message']}",
+                        "completed": False,
+                        "needs_input": True
+                    }
+                else:
+                    # User said something irrelevant - friendly joke response
+                    joke_response = result.get("joke_response", "Please provide device information or type 'no' to skip.")
+                    self.session.add_message("bot", joke_response)
+                    
+                    # Re-prompt for the step
+                    reprompt = self._step_additional_info()
+                    
+                    return {
+                        "message": f"{joke_response}\n\n{reprompt['message']}",
+                        "completed": False,
+                        "needs_input": True
+                    }
+            
             # For other steps OR if device extraction suggested it's an interrupt, use generic interrupt handler
             self.session.mark_interrupted()
             gemini_response = self.gemini.generate_response(
