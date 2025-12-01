@@ -1,0 +1,17 @@
+# DormDoctorDiagnostics Dependencies
+
+# Core API integrations
+google-cloud-dialogflow==2.26.0  # Dialogflow ES API for intent detection
+google-genai>=0.2.0              # Gemini API via Google Gen AI SDK
+gspread==5.12.0                  # Google Sheets API
+google-auth==2.25.2              # Google authentication
+
+# Web scraping & HTTP requests
+requests>=2.31.0                 # HTTP library for SerpAPI calls
+
+# Environment variables
+python-dotenv>=1.0.0             # Load .env files
+
+# Terminal utilities (for arrow key menus on Unix systems)
+# Note: termios and tty are built-in on Unix/Linux/macOS, not needed on Windows
+

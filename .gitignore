@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Service account credentials
+*.json
+!requirements.json
+
+# Logs
+*.log
+
+# Tickets
+tickets.json
+
+# OS
+.DS_Store
+Thumbs.db
