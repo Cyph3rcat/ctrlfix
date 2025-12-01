@@ -207,6 +207,12 @@
             }
         });
         
+        socket.on('diagnostic', (data) => {
+            // Show diagnostic logs in gray/cyan
+            const diagnosticText = data.text || '';
+            term.writeln('\x1b[90m' + diagnosticText + '\x1b[0m');
+        });
+        
         socket.on('pong', () => {
             // Keep-alive response
         });

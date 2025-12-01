@@ -96,40 +96,65 @@ def handle_input(data):
     flow = session_data['flow']
     current_step = flow.session.get_step()
     
-    # Log with color
+    # Log with color (shows in server console)
     print(f"{Colors.GRAY}[Input] {session_id[:8]}... | Step {current_step} | {user_input[:50]}{Colors.RESET}")
     
-    # Check if this is a menu step (arrow key menu detection)
-    # For web, we still allow arrow keys to work if terminal supports it
-    # But we also accept numeric input as fallback
+    # Send diagnostic to web terminal
+    emit('diagnostic', {'text': f"[Step {current_step}] Processing input..."})
+    
+    # Check if this is a menu step
     if current_step == DiagnosticStep.ISSUE_TYPE:
-        # If user typed a number (1-3), convert to index (0-2)
         if user_input.isdigit():
             choice = int(user_input) - 1
             if 0 <= choice < len(ISSUE_TYPE_OPTIONS):
                 user_input = str(choice)
     elif current_step == DiagnosticStep.FINAL_BOOKING:
-        # If user typed a number (1-2), convert to index (0-1)
         if user_input.isdigit():
             choice = int(user_input) - 1
             if 0 <= choice < len(BOOKING_OPTIONS):
                 user_input = str(choice)
     
-    # Process the input through flow manager
-    result = flow.process_input(user_input)
-    session_data['current_step'] = flow.session.get_step()
+    # Capture stdout to send diagnostic logs to web terminal
+    import sys
+    from io import StringIO
+    old_stdout = sys.stdout
+    sys.stdout = captured_output = StringIO()
     
-    # Send response back to client
-    emit('output', {
-        'text': result['message'],
-        'needs_input': result.get('needs_input', True),
-        'completed': result.get('completed', False)
-    })
+    try:
+        # Process the input through flow manager
+        result = flow.process_input(user_input)
+        session_data['current_step'] = flow.session.get_step()
+        
+        # Get captured diagnostic output
+        diagnostic_logs = captured_output.getvalue()
+        
+        # Restore stdout
+        sys.stdout = old_stdout
+        
+        # Send diagnostic logs to terminal
+        if diagnostic_logs.strip():
+            emit('diagnostic', {'text': diagnostic_logs.strip()})
+        
+        # Send response back to client
+        emit('output', {
+            'text': result['message'],
+            'needs_input': result.get('needs_input', True),
+            'completed': result.get('completed', False)
+        })
+        
+        # If flow is completed, clean up session
+        if result.get('completed'):
+            print(f"{Colors.GREEN}[WebSocket] Session completed: {session_id[:8]}...{Colors.RESET}")
+            del sessions[session_id]
     
-    # If flow is completed, clean up session
-    if result.get('completed'):
-        print(f"{Colors.GREEN}[WebSocket] Session completed: {session_id[:8]}...{Colors.RESET}")
-        del sessions[session_id]
+    except Exception as e:
+        # Restore stdout on error
+        sys.stdout = old_stdout
+        print(f"{Colors.RED}[Error] {e}{Colors.RESET}")
+        emit('output', {
+            'text': f"\n❌ Error processing request: {str(e)}",
+            'needs_input': False
+        })
 
 
 @socketio.on('ping')
