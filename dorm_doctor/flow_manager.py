@@ -81,6 +81,9 @@ class FlowManager:
             text=user_input
         )
         
+        # Log Dialogflow detection with color
+        print_diagnostic(f"[Dialogflow] Intent: {Colors.YELLOW}{intent_result.get('intent')}{Colors.RESET} | Confidence: {Colors.number(intent_result.get('confidence', 0))}")
+        
         # Check if it's a known interrupt intent (user asking questions mid-flow)
         # These intents should be configured in Dialogflow with fulfillment text
         if intent_result["intent"] in INTERRUPT_INTENTS and intent_result["confidence"] > 0.6:
@@ -156,7 +159,7 @@ class FlowManager:
                 device_type = self.session.get_data("device.type") or "unknown"
                 result = self.gemini.extract_brandmodel(user_input, self.session.conversation_history, device_type)
                 
-                print(f"[Gemini] Brand/model extraction: {result}")
+                print_diagnostic(f"[Gemini] Brand/model extraction: {Colors.CYAN}{result}{Colors.RESET}")
                 
                 if result["fulfilled"]:
                     # Entity fulfilled - store and move on
@@ -538,7 +541,7 @@ class FlowManager:
         
         print(f"[Gemini] Additional info extraction: {result}")
         
-        if result["relevant"]:
+        if result.get("relevant"):
             # User provided relevant device info
             additional_info = result["additional_info"]
             self.session.update_data("device.additional_info", additional_info)
@@ -558,7 +561,7 @@ class FlowManager:
             }
         else:
             # User said something irrelevant - friendly joke response
-            joke_response = result["joke_response"]
+            joke_response = result.get("joke_response", "Please provide device information or type 'no' to skip.")
             self.session.add_message("bot", joke_response)
             
             # Re-prompt for the step
@@ -570,28 +573,38 @@ class FlowManager:
                 "needs_input": True
             }
     
-    # Step 5: Issue type (Arrow key menu - handled by CLI)
+    # Step 5: Issue type (Menu selection)
     def _step_issue_type(self):
         message = (
             "What type of issue are you experiencing?\n\n"
-            "Please select using the arrow key menu..."
+            "1. Software (apps, OS, performance, viruses)\n"
+            "2. Hardware (screen, battery, ports, physical damage)\n"
+            "3. Unsure\n\n"
+            "Type 1, 2, or 3 (or 's', 'h', 'u'):"
         )
         self.session.add_message("bot", message)
         return {"message": message, "completed": False, "needs_input": True}
     
     def _process_issue_type(self, user_input, intent_result):
-        # This is called when CLI passes the menu selection result
-        # user_input should be the selected option text or index
+        # Accept multiple input formats: numbers (1-3), letters (s/h/u), or full text
+        user_input = user_input.strip().lower()
+        issue_type = None
+        
         try:
-            # Try to parse as index first
+            # Try to parse as number (1-3)
             choice_idx = int(user_input)
             issue_type = ISSUE_TYPE_MAPPING.get(choice_idx)
         except ValueError:
-            # Fallback: try to match text
-            user_lower = user_input.lower()
-            if "software" in user_lower:
+            # Try letter shortcuts or text matching
+            if user_input in ['s', '1']:
                 issue_type = "software"
-            elif "hardware" in user_lower:
+            elif user_input in ['h', '2']:
+                issue_type = "hardware"
+            elif user_input in ['u', '3']:
+                issue_type = "unsure"
+            elif "software" in user_input:
+                issue_type = "software"
+            elif "hardware" in user_input:
                 issue_type = "hardware"
             else:
                 issue_type = "unsure"
@@ -812,28 +825,34 @@ class FlowManager:
         self.session.add_message("bot", message)
         return {"message": message, "completed": False, "needs_input": True}
     
-    # Step 9: Final booking (Arrow key menu - handled by CLI)
+    # Step 9: Final booking (Menu selection)
     def _step_final_booking(self):
         message = (
             "Final step! How would you like to proceed?\n\n"
-            "Please select using the arrow key menu..."
+            "1. Instant drop-off service (faster if you're sure about the issue)\n"
+            "2. Contact mechanic first for further consultation\n\n"
+            "Type 1 or 2:"
         )
         self.session.add_message("bot", message)
         return {"message": message, "completed": False, "needs_input": True}
     
     def _process_final_booking(self, user_input, intent_result):
-        # This is called when CLI passes the menu selection result
-        # user_input should be the selected option index
+        # Accept number input (1-2) or keywords
+        user_input = user_input.strip().lower()
+        booking_type = None
+        
         try:
             choice_idx = int(user_input)
             booking_type = BOOKING_MAPPING.get(choice_idx)
         except ValueError:
             # Fallback: try to match text
-            user_lower = user_input.lower()
-            if "instant" in user_lower or "drop" in user_lower:
+            if "instant" in user_input or "drop" in user_input:
                 booking_type = "instant_dropoff"
-            else:
+            elif "contact" in user_input or "mechanic" in user_input or "consult" in user_input:
                 booking_type = "contact_first"
+            else:
+                # Default to contact first if unclear
+                booking_type = None
         
         if booking_type:
             self.session.update_data("booking_type", booking_type)

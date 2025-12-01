@@ -4,9 +4,11 @@ Wraps the existing flow_manager for web deployment with xterm.js frontend.
 from flask import Flask, render_template, session
 from flask_socketio import SocketIO, emit
 from dorm_doctor.flow_manager import FlowManager
-from dorm_doctor.config import DiagnosticStep, ISSUE_TYPE_OPTIONS, BOOKING_OPTIONS
+from dorm_doctor.config import DiagnosticStep, ISSUE_TYPE_OPTIONS, BOOKING_OPTIONS, Colors
 import uuid
 import os
+import sys
+from io import StringIO
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -14,6 +16,25 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Store active sessions in memory (single-user or low-traffic deployment)
 sessions = {}
+
+
+class DiagnosticCapture:
+    """Capture print statements for diagnostic logging to web terminal"""
+    def __init__(self, socket_emit_func):
+        self.emit = socket_emit_func
+        self.original_stdout = sys.stdout
+        
+    def write(self, text):
+        # Send to original stdout (server logs)
+        self.original_stdout.write(text)
+        
+        # Also send diagnostic info to web terminal
+        if text.strip() and ('[' in text or '✓' in text or '✗' in text):
+            # This is a diagnostic message
+            self.emit('diagnostic', {'text': text.strip()})
+    
+    def flush(self):
+        self.original_stdout.flush()
 
 
 @app.route('/')
@@ -34,7 +55,7 @@ def handle_connect():
         'current_step': None
     }
     
-    print(f"[WebSocket] New session connected: {session_id}")
+    print(f"{Colors.GREEN}[WebSocket] New session connected: {session_id[:8]}...{Colors.RESET}")
     
     # Start the diagnostic flow
     flow = sessions[session_id]['flow']
@@ -75,7 +96,8 @@ def handle_input(data):
     flow = session_data['flow']
     current_step = flow.session.get_step()
     
-    print(f"[WebSocket] {session_id[:8]}... | Step {current_step} | Input: {user_input[:50]}")
+    # Log with color
+    print(f"{Colors.GRAY}[Input] {session_id[:8]}... | Step {current_step} | {user_input[:50]}{Colors.RESET}")
     
     # Check if this is a menu step (arrow key menu detection)
     # For web, we still allow arrow keys to work if terminal supports it
@@ -106,7 +128,7 @@ def handle_input(data):
     
     # If flow is completed, clean up session
     if result.get('completed'):
-        print(f"[WebSocket] Session completed: {session_id}")
+        print(f"{Colors.GREEN}[WebSocket] Session completed: {session_id[:8]}...{Colors.RESET}")
         del sessions[session_id]
 
 
